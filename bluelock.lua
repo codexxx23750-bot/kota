@@ -7,7 +7,8 @@ local CONFIG = {
     session_pause_max = 120,
     hook_observe_time = 10,
     backoff_cap      = 60,
-    spin_keywords    = {"spin","lucky","giro","sorte","weapon","roll","case","crate","reward"},
+    -- Removido 'case', 'roll', 'weapon' para evitar falsos positivos
+    spin_keywords    = {"spin","lucky","giro","sorte"}, 
 }
 
 local AntiBan = {}
@@ -15,22 +16,22 @@ AntiBan.__index = AntiBan
 
 function AntiBan.new()
     return setmetatable({
-        consecutive_errors = 0, spins_this_session = 0,
-        total_spins = 0, total_ok = 0, total_err = 0, blacklist = {},
+        consecutive_errors = 0, attempts_this_session = 0,
+        total_attempts = 0, total_err = 0, blacklist = {},
     }, AntiBan)
 end
 
 function AntiBan:jitter(base) return math.max(0.2, base * (0.6 + math.random() * 0.8)) end
-function AntiBan:on_success() self.consecutive_errors = 0; self.total_ok = self.total_ok + 1 end
+function AntiBan:on_success() self.consecutive_errors = 0 end
 function AntiBan:on_error()
     self.consecutive_errors = self.consecutive_errors + 1
     self.total_err = self.total_err + 1
     return CONFIG.base_interval * math.min(2 ^ self.consecutive_errors, CONFIG.backoff_cap / CONFIG.base_interval)
 end
-function AntiBan:needs_session_pause() return self.spins_this_session >= CONFIG.spins_per_session end
+function AntiBan:needs_session_pause() return self.attempts_this_session >= CONFIG.spins_per_session end
 function AntiBan:session_pause()
     task.wait(CONFIG.session_pause_min + math.random() * (CONFIG.session_pause_max - CONFIG.session_pause_min))
-    self.spins_this_session = 0
+    self.attempts_this_session = 0
 end
 function AntiBan:is_blacklisted(name) return self.blacklist[name] == true end
 function AntiBan:blacklist_remote(name) self.blacklist[name] = true end
@@ -57,7 +58,6 @@ function UI.new(on_close_callback)
     main.ZIndex = 1
     main.Parent = self.gui
 
-    -- Arrastar manual com conexão salva para desconectar depois
     local dragging, dragInput, dragStart, startPos
     local dragConnection
     
@@ -78,10 +78,7 @@ function UI.new(on_close_callback)
         end
     end)
 
-    -- Desconecta o drag global ao destruir a UI
-    self.gui.Destroying:Connect(function()
-        if dragConnection then dragConnection:Disconnect() end
-    end)
+    self.gui.Destroying:Connect(function() if dragConnection then dragConnection:Disconnect() end end)
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(31, 31, 31); stroke.Thickness = 1; stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; stroke.Parent = main
@@ -120,9 +117,10 @@ function UI.new(on_close_callback)
     local log_pad = Instance.new("UIPadding")
     log_pad.PaddingLeft = UDim.new(0, 6); log_pad.PaddingTop = UDim.new(0, 4); log_pad.Parent = log
 
+    -- Contador honesto: "attempts" em vez de "spins"
     local counter = Instance.new("TextLabel")
     counter.Size = UDim2.new(1, -24, 0, 24); counter.Position = UDim2.new(0, 12, 0, 300)
-    counter.BackgroundColor3 = Color3.fromRGB(10, 10, 10); counter.Text = "spins: 0 ok: 0 err: 0"
+    counter.BackgroundColor3 = Color3.fromRGB(10, 10, 10); counter.Text = "attempts: 0 | errors: 0"
     counter.TextColor3 = Color3.fromRGB(200, 200, 200); counter.Font = Enum.Font.Code; counter.TextSize = 12
     counter.TextXAlignment = Enum.TextXAlignment.Left; counter.ZIndex = 2; counter.Parent = main
 
@@ -177,7 +175,11 @@ function UI:add_log(text, color)
 end
 
 function UI:set_status(text, color) if self.status and self.status.Parent then self.status.Text = text; self.status.TextColor3 = color end end
-function UI:update_counter(ab) if self.counter and self.counter.Parent then self.counter.Text = string.format("spins: %d ok: %d err: %d", ab.total_spins, ab.total_ok, ab.total_err) end end
+function UI:update_counter(ab) 
+    if self.counter and self.counter.Parent then 
+        self.counter.Text = string.format("attempts: %d | errors: %d", ab.total_attempts, ab.total_err) 
+    end 
+end
 
 -- Scanner
 local Scanner = {}
@@ -193,15 +195,28 @@ end
 function Scanner.new(ui, antiban)
     return setmetatable({
         ui = ui, antiban = antiban, candidates = {}, 
-        captured_args = nil, captured_remote = nil, captured_prompt = nil, 
+        captured_args = nil, captured_args_n = 0, -- Guarda o número exato de args
+        captured_remote = nil, captured_prompt = nil, 
         captured_click = nil, captured_bindable = nil, captured_method = nil,
-        is_scanning = false, hook_connection = nil
+        is_scanning = false, seen_objects = {}
     }, Scanner)
+end
+
+function Scanner:add_candidate(obj, name, ctype, layer, extra)
+    -- Deduplicação para evitar múltiplos scans do mesmo objeto
+    if self.seen_objects[obj] then return false end
+    self.seen_objects[obj] = true
+    
+    local c = {name = name, obj = obj, type = ctype, layer = layer}
+    if extra then for k, v in pairs(extra) do c[k] = v end end
+    table.insert(self.candidates, c)
+    return true
 end
 
 function Scanner:layer1_passive()
     self.ui:add_log("[L1] passive scan...", Color3.fromRGB(120, 200, 120))
-    local roots = {game:GetService("ReplicatedStorage"), game:GetService("Workspace")}
+    -- Limitando a busca no workspace para não travar (evita 50k de parts)
+    local roots = {game:GetService("ReplicatedStorage")}
     local ok_pg, pg = pcall(function() return game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui") end)
     if ok_pg and pg then table.insert(roots, pg) end
 
@@ -210,15 +225,17 @@ function Scanner:layer1_passive()
         for _, obj in ipairs(root:GetDescendants()) do
             if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") or obj:IsA("BindableEvent") then
                 if has_keyword(obj.Name) then
-                    count = count + 1
-                    table.insert(self.candidates, {name = obj.Name, obj = obj, type = obj.ClassName, layer = 1})
-                    self.ui:add_log("[L1] " .. obj.ClassName .. ": " .. obj:GetFullName(), Color3.fromRGB(255, 255, 255))
+                    if self:add_candidate(obj, obj.Name, obj.ClassName, 1) then
+                        count = count + 1
+                        self.ui:add_log("[L1] " .. obj.ClassName .. ": " .. obj:GetFullName(), Color3.fromRGB(255, 255, 255))
+                    end
                 end
             elseif obj:IsA("ProximityPrompt") or obj:IsA("ClickDetector") then
                 if has_keyword(obj.Name) or (obj.Parent and has_keyword(obj.Parent.Name)) then
-                    count = count + 1
-                    table.insert(self.candidates, {name = obj.Name, obj = obj, type = obj.ClassName, layer = 1})
-                    self.ui:add_log("[L1] " .. obj.ClassName .. ": " .. obj:GetFullName(), Color3.fromRGB(255, 255, 255))
+                    if self:add_candidate(obj, obj.Name, obj.ClassName, 1) then
+                        count = count + 1
+                        self.ui:add_log("[L1] " .. obj.ClassName .. ": " .. obj:GetFullName(), Color3.fromRGB(255, 255, 255))
+                    end
                 end
             end
         end
@@ -238,8 +255,9 @@ function Scanner:layer2_gc()
                     pcall(function()
                         for k, v in pairs(obj) do
                             if type(k) == "string" and has_keyword(k) then
-                                count = count + 1
-                                table.insert(self.candidates, {name = k, obj = v, type = "gc_table", layer = 2})
+                                if self:add_candidate(v, k, "gc_table", 2) then
+                                    count = count + 1
+                                end
                             end
                         end
                     end)
@@ -261,8 +279,9 @@ function Scanner:layer3_bytecode()
             if ok and type(bc) == "string" then
                 for _, kw in ipairs(CONFIG.spin_keywords) do
                     if bc:lower():find(kw, 1, true) then
-                        count = count + 1
-                        table.insert(self.candidates, {name = obj:GetFullName(), obj = obj, type = "bytecode_ref", layer = 3, keyword = kw})
+                        if self:add_candidate(obj, obj:GetFullName(), "bytecode_ref", 3) then
+                            count = count + 1
+                        end
                         break
                     end
                 end
@@ -285,8 +304,9 @@ function Scanner:layer4_hook_passive()
             if method == "FireServer" or method == "InvokeServer" then
                 local ok_n, name = pcall(function() return self.Name end)
                 if ok_n and has_keyword(name) then 
-                    -- Salva em lista para não sobrescrever nomes iguais
-                    table.insert(captured, {name = name, remote = self, method = method, args = {...}})
+                    -- table.pack salva o '.n' que previne a perda de nils
+                    local packed_args = table.pack(...)
+                    table.insert(captured, {name = name, remote = self, method = method, args = packed_args, args_n = packed_args.n})
                 end
             end
             return real_namecall(self, ...)
@@ -295,21 +315,20 @@ function Scanner:layer4_hook_passive()
 
     if not hook_success then return 0 end
 
-    -- Espera observando (Se fechar a UI, tenta restaurar o hook e sai)
     local start_time = tick()
     while tick() - start_time < CONFIG.hook_observe_time do
         task.wait(0.1)
         if not self.ui.gui.Parent then break end 
     end
 
-    -- Restauração garantida com pcall
     pcall(function() hookmetamethod(game, "__namecall", real_namecall) end)
 
     local count = 0
     for _, info in ipairs(captured) do
-        count = count + 1
-        table.insert(self.candidates, {name = info.name, obj = info.remote, type = "hooked_remote", layer = 4, args = info.args, method = info.method})
-        self.ui:add_log("[L4] captured: " .. info.name .. " (" .. info.method .. ")", Color3.fromRGB(255, 255, 255))
+        if self:add_candidate(info.remote, info.name, "hooked_remote", 4, {args = info.args, args_n = info.args_n, method = info.method}) then
+            count = count + 1
+            self.ui:add_log("[L4] captured: " .. info.name .. " (" .. info.method .. ")", Color3.fromRGB(255, 255, 255))
+        end
     end
     self.ui:add_log("[L4] captured " .. count .. " remotes", Color3.fromRGB(120, 200, 120))
     return count
@@ -318,12 +337,9 @@ end
 function Scanner:layer5_active_test()
     self.ui:add_log("[L5] active test...", Color3.fromRGB(120, 200, 120))
     local ordered = {}
-    
-    -- Ordena dando prioridade para hooked_remote e Nomes com "spin"
     for _, c in ipairs(self.candidates) do 
         if c.layer == 4 or (c.name and c.name:lower():find("spin")) then table.insert(ordered, c) end 
     end
-    -- Resto
     for _, c in ipairs(self.candidates) do 
         if not (c.layer == 4 or (c.name and c.name:lower():find("spin"))) then table.insert(ordered, c) end 
     end
@@ -332,35 +348,41 @@ function Scanner:layer5_active_test()
         if self.antiban:is_blacklisted(c.name) then
             self.ui:add_log("[L5] skip blacklisted: " .. c.name, Color3.fromRGB(200, 160, 80))
         elseif (c.type == "hooked_remote" or c.type == "RemoteEvent" or c.type == "RemoteFunction") and c.obj then
-            local method_to_use = c.method or (c.type == "RemoteFunction" and "InvokeServer" or "FireServer")
+            local method = c.method or (c.type == "RemoteFunction" and "InvokeServer" or "FireServer")
+            
+            -- Usa table.unpack com limite (1, args_n) para não perder o último argumento se for nil
+            local unpack_args = c.args or {}
+            local unpack_n = c.args_n or #unpack_args
+            
             local ok, err = pcall(function()
-                if method_to_use == "InvokeServer" then c.obj:InvokeServer(table.unpack(c.args or {}))
-                else c.obj:FireServer(table.unpack(c.args or {})) end
+                if method == "InvokeServer" then c.obj:InvokeServer(table.unpack(unpack_args, 1, unpack_n))
+                else c.obj:FireServer(table.unpack(unpack_args, 1, unpack_n)) end
             end)
             if ok then
-                self.captured_remote = c.obj; self.captured_args = c.args or {}; self.captured_method = method_to_use 
-                self.ui:add_log("[L5] SUCCESS ("..method_to_use.."): " .. c.name, Color3.fromRGB(120, 255, 120))
+                self.captured_remote = c.obj; self.captured_args = unpack_args; self.captured_args_n = unpack_n; self.captured_method = method 
+                self.ui:add_log("[L5] TARGET SET ("..method.."): " .. c.name, Color3.fromRGB(120, 255, 120))
                 return true
             else
                 self.antiban:blacklist_remote(c.name)
+                self.ui:add_log("[L5] fail: " .. c.name .. " | " .. tostring(err), Color3.fromRGB(255, 120, 120))
             end
         elseif c.type == "ProximityPrompt" and c.obj then
             local ok = pcall(function() fireproximityprompt(c.obj) end)
             if ok then
                 self.captured_prompt = c.obj
-                self.ui:add_log("[L5] SUCCESS (Prompt): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
+                self.ui:add_log("[L5] TARGET SET (Prompt): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
             else self.antiban:blacklist_remote(c.name) end
         elseif c.type == "ClickDetector" and c.obj then
             local ok = pcall(function() fireclickdetector(c.obj) end)
             if ok then
                 self.captured_click = c.obj
-                self.ui:add_log("[L5] SUCCESS (ClickDetector): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
+                self.ui:add_log("[L5] TARGET SET (ClickDetector): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
             else self.antiban:blacklist_remote(c.name) end
         elseif c.type == "BindableEvent" and c.obj then
             local ok = pcall(function() c.obj:Fire() end)
             if ok then
                 self.captured_bindable = c.obj
-                self.ui:add_log("[L5] SUCCESS (BindableEvent): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
+                self.ui:add_log("[L5] TARGET SET (BindableEvent): " .. c.name, Color3.fromRGB(120, 255, 120)); return true
             else self.antiban:blacklist_remote(c.name) end
         end
     end
@@ -369,12 +391,13 @@ function Scanner:layer5_active_test()
 end
 
 function Scanner:run_all()
-    if self.is_scanning then return "busy" end -- Avisa que está ocupado
+    if self.is_scanning then return "busy" end
     self.is_scanning = true
     self.candidates = {}
+    self.seen_objects = {}
     
-    self.captured_remote = nil; self.captured_args = nil; self.captured_prompt = nil
-    self.captured_click = nil; self.captured_bindable = nil; self.captured_method = nil
+    self.captured_remote = nil; self.captured_args = nil; self.captured_args_n = 0
+    self.captured_prompt = nil; self.captured_click = nil; self.captured_bindable = nil; self.captured_method = nil
 
     local success, result = pcall(function()
         self:layer1_passive()
@@ -412,7 +435,6 @@ function Executor:start()
             local ok, err = pcall(function()
                 if not self.active then return end
                 
-                -- Se estiver rodando e o cara clicar em SCAN, o alvo fica nil. O loop pausa e espera.
                 if not self.scanner.captured_remote and not self.scanner.captured_prompt and not self.scanner.captured_click and not self.scanner.captured_bindable then
                     task.wait(1) return
                 end
@@ -420,32 +442,35 @@ function Executor:start()
                 if self.scanner.captured_remote then
                     local remote = self.scanner.captured_remote
                     local args = self.scanner.captured_args or {}
+                    local args_n = self.scanner.captured_args_n or #args
                     local method = self.scanner.captured_method or "FireServer"
-                    if method == "InvokeServer" then remote:InvokeServer(table.unpack(args)) else remote:FireServer(table.unpack(args)) end
+                    
+                    if method == "InvokeServer" then remote:InvokeServer(table.unpack(args, 1, args_n))
+                    else remote:FireServer(table.unpack(args, 1, args_n)) end
                 elseif self.scanner.captured_prompt then fireproximityprompt(self.scanner.captured_prompt)
                 elseif self.scanner.captured_click then fireclickdetector(self.scanner.captured_click)
                 elseif self.scanner.captured_bindable then self.scanner.captured_bindable:Fire() end
             end)
             if not self.active then break end
             
+            -- Contador honesto (Tentativas)
+            self.antiban.total_attempts = self.antiban.total_attempts + 1
+            self.antiban.attempts_this_session = self.antiban.attempts_this_session + 1
+            
             if ok then 
-                self.antiban.total_spins = self.antiban.total_spins + 1
-                self.antiban.spins_this_session = self.antiban.spins_this_session + 1
                 self.antiban:on_success() 
             else
                 local backoff = self.antiban:on_error()
-                self.ui:add_log("spin err: " .. tostring(err), Color3.fromRGB(255, 120, 120))
+                self.ui:add_log("exec err: " .. tostring(err), Color3.fromRGB(255, 120, 120))
                 task.wait(backoff)
             end
             
             self.ui:update_counter(self.antiban)
             
-            -- Verifica a flag novamente antes da pausa de sessão
             if self.active and self.antiban:needs_session_pause() then
                 self.ui:set_status("session pause...", Color3.fromRGB(200, 160, 80))
                 task.wait(CONFIG.session_pause_min + math.random() * (CONFIG.session_pause_max - CONFIG.session_pause_min))
-                self.antiban.spins_this_session = 0
-                -- Só muda o status pra ON se ainda estiver ativo
+                self.antiban.attempts_this_session = 0
                 if self.active then self.ui:set_status("auto spin: ON", Color3.fromRGB(120, 255, 120)) end
             end
             
@@ -488,7 +513,6 @@ end)
 
 ui.interval.FocusLost:Connect(function() 
     local n = tonumber(ui.interval.Text)
-    -- Previne fracionários e limita o valor
     if n and n >= 0.3 then n = math.floor(n) end 
     if n and n < 0.3 then n = 0.3 end
     if not n then n = CONFIG.base_interval end
@@ -498,7 +522,6 @@ end)
 
 ui.session.FocusLost:Connect(function() 
     local n = tonumber(ui.session.Text)
-    -- Previne valores negativos, fracionários ou exagerados
     if n then n = math.floor(n) end
     if not n or n < 5 then n = 5 end
     if n > 1000 then n = 1000 end
