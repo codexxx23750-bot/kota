@@ -57,7 +57,7 @@ function UI.new()
     main.ZIndex = 1
     main.Parent = self.gui
 
-    -- Arrastar manual (substitui o Draggable bugado)
+    -- Arrastar manual
     local dragging, dragInput, dragStart, startPos
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -96,9 +96,12 @@ function UI.new()
     title.Font = Enum.Font.Code
     title.TextSize = 20
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.PaddingLeft = UDim.new(0, 12)
     title.ZIndex = 2
     title.Parent = main
+
+    local title_pad = Instance.new("UIPadding")
+    title_pad.PaddingLeft = UDim.new(0, 12)
+    title_pad.Parent = title
 
     local close = Instance.new("TextButton")
     close.Name = "close"
@@ -270,7 +273,7 @@ function UI:add_log(text, color)
     label.TextSize = 11
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextWrapped = true
-    label.ZIndex = 3 -- Fica acima do ScrollingFrame
+    label.ZIndex = 3
     label.Parent = self.log
 
     local labels = {}
@@ -293,7 +296,11 @@ local function has_keyword(s)
 end
 
 function Scanner.new(ui, antiban)
-    return setmetatable({ui = ui, antiban = antiban, candidates = {}, captured_args = nil, captured_remote = nil, captured_prompt = nil}, Scanner)
+    return setmetatable({
+        ui = ui, antiban = antiban, candidates = {}, 
+        captured_args = nil, captured_remote = nil, captured_prompt = nil, 
+        captured_method = nil -- NOVO: Armazena se é FireServer ou InvokeServer
+    }, Scanner)
 end
 
 function Scanner:layer1_passive()
@@ -418,14 +425,21 @@ function Scanner:layer5_active_test()
     for _, c in ipairs(ordered) do
         if self.antiban:is_blacklisted(c.name) then
             self.ui:add_log("[L5] skip blacklisted: " .. c.name, Color3.fromRGB(200, 160, 80))
-        elseif (c.type == "hooked_remote" or c.type == "RemoteEvent") and c.obj then
+        elseif (c.type == "hooked_remote" or c.type == "RemoteEvent" or c.type == "RemoteFunction") and c.obj then
+            -- CORREÇÃO: Tenta descobrir o método real ou assume FireServer se não souber
+            local method_to_use = c.method or (c.type == "RemoteFunction" and "InvokeServer" or "FireServer")
             local ok, err = pcall(function()
-                if c.method == "InvokeServer" then c.obj:InvokeServer(table.unpack(c.args or {}))
-                else c.obj:FireServer(table.unpack(c.args or {})) end
+                if method_to_use == "InvokeServer" then 
+                    c.obj:InvokeServer(table.unpack(c.args or {}))
+                else 
+                    c.obj:FireServer(table.unpack(c.args or {})) 
+                end
             end)
             if ok then
-                self.captured_remote = c.obj; self.captured_args = c.args or {}
-                self.ui:add_log("[L5] SUCCESS (Remote): " .. c.name, Color3.fromRGB(120, 255, 120))
+                self.captured_remote = c.obj
+                self.captured_args = c.args or {}
+                self.captured_method = method_to_use -- SALVA O MÉTODO PARA O LOOP
+                self.ui:add_log("[L5] SUCCESS ("..method_to_use.."): " .. c.name, Color3.fromRGB(120, 255, 120))
                 return true
             else
                 self.antiban:blacklist_remote(c.name)
@@ -478,7 +492,14 @@ function Executor:start()
                 if self.scanner.captured_remote then
                     local remote = self.scanner.captured_remote
                     local args = self.scanner.captured_args or {}
-                    remote:FireServer(table.unpack(args))
+                    local method = self.scanner.captured_method or "FireServer"
+                    
+                    -- CORREÇÃO: Respeita o método descoberto no Scanner
+                    if method == "InvokeServer" then
+                        remote:InvokeServer(table.unpack(args))
+                    else
+                        remote:FireServer(table.unpack(args))
+                    end
                 elseif self.scanner.captured_prompt then
                     if self.scanner.captured_prompt:IsA("ProximityPrompt") then fireproximityprompt(self.scanner.captured_prompt)
                     else self.scanner.captured_prompt:FireServer() end
