@@ -467,7 +467,6 @@ end
 -- camada 5: teste ativo controlado
 function Scanner:layer5_active_test()
     self.ui:add_log("[L5] active test...", Color3.fromRGB(120, 200, 120))
-    -- preferir candidatos das camadas 4 e 2 (mais confiáveis)
     local ordered = {}
     for _, c in ipairs(self.candidates) do
         if c.layer == 4 or c.layer == 2 then table.insert(ordered, c) end
@@ -479,9 +478,7 @@ function Scanner:layer5_active_test()
     for _, c in ipairs(ordered) do
         if self.antiban:is_blacklisted(c.name) then
             self.ui:add_log("[L5] skip blacklisted: " .. c.name, Color3.fromRGB(200, 160, 80))
-            continue
-        end
-        if c.type == "hooked_remote" and c.obj then
+        elseif c.type == "hooked_remote" and c.obj then
             local ok, err = pcall(function()
                 if c.method == "InvokeServer" then
                     c.obj:InvokeServer(table.unpack(c.args or {}))
@@ -624,3 +621,42 @@ end)
 
 ui:add_log("kota loaded", Color3.fromRGB(255, 255, 255))
 ui:add_log("press SCAN to discover spin remote", Color3.fromRGB(180, 180, 180))
+
+-- patched layer 5 below
+function Scanner:layer5_active_test()
+    self.ui:add_log("[L5] active test...", Color3.fromRGB(120, 200, 120))
+    local ordered = {}
+    for _, c in ipairs(self.candidates) do
+        if c.layer == 4 or c.layer == 2 then table.insert(ordered, c) end
+    end
+    for _, c in ipairs(self.candidates) do
+        if c.layer == 1 or c.layer == 3 then table.insert(ordered, c) end
+    end
+
+    for _, c in ipairs(ordered) do
+        if self.antiban:is_blacklisted(c.name) then
+            self.ui:add_log("[L5] skip blacklisted: " .. c.name, Color3.fromRGB(200, 160, 80))
+        elseif c.type == "hooked_remote" and c.obj then
+            local ok, err = pcall(function()
+                if c.method == "InvokeServer" then
+                    c.obj:InvokeServer(table.unpack(c.args or {}))
+                else
+                    c.obj:FireServer(table.unpack(c.args or {}))
+                end
+            end)
+            if ok then
+                self.captured_remote = c.obj
+                self.captured_args = c.args or {}
+                self.ui:add_log("[L5] SUCCESS: " .. c.name, Color3.fromRGB(120, 255, 120))
+                return true
+            else
+                self.antiban:blacklist_remote(c.name)
+                self.ui:add_log("[L5] fail/blacklist: " .. c.name, Color3.fromRGB(255, 120, 120))
+            end
+        end
+    end
+
+    self.ui:add_log("[L5] no remote confirmed", Color3.fromRGB(255, 120, 120))
+    return false
+end
+
