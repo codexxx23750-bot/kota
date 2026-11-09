@@ -39,7 +39,7 @@ function AntiBan:blacklist_remote(name) self.blacklist[name] = true end
 local UI = {}
 UI.__index = UI
 
-function UI.new()
+function UI.new(on_close_callback)
     local self = setmetatable({}, UI)
     self.gui = Instance.new("ScreenGui")
     self.gui.Name = "kota_ui"
@@ -114,7 +114,10 @@ function UI.new()
     close.TextSize = 18
     close.ZIndex = 2
     close.Parent = main
-    close.MouseButton1Click:Connect(function() self.gui:Destroy() end)
+    close.MouseButton1Click:Connect(function() 
+        if on_close_callback then on_close_callback() end
+        self.gui:Destroy() 
+    end)
 
     local status = Instance.new("TextLabel")
     status.Name = "status"
@@ -299,7 +302,7 @@ function Scanner.new(ui, antiban)
     return setmetatable({
         ui = ui, antiban = antiban, candidates = {}, 
         captured_args = nil, captured_remote = nil, captured_prompt = nil, 
-        captured_method = nil -- NOVO: Armazena se é FireServer ou InvokeServer
+        captured_method = nil, is_scanning = false -- Trava de varredura concorrente
     }, Scanner)
 end
 
@@ -419,14 +422,20 @@ end
 function Scanner:layer5_active_test()
     self.ui:add_log("[L5] active test...", Color3.fromRGB(120, 200, 120))
     local ordered = {}
-    for _, c in ipairs(self.candidates) do if c.layer == 4 or c.layer == 2 then table.insert(ordered, c) end end
-    for _, c in ipairs(self.candidates) do if c.layer == 1 or c.layer == 3 then table.insert(ordered, c) end end
+    -- Prioriza os que tem "spin" no nome ou que vieram do Hook
+    for _, c in ipairs(self.candidates) do 
+        if c.layer == 4 or c.layer == 2 or (c.name and c.name:lower():find("spin")) then 
+            table.insert(ordered, c) 
+        end 
+    end
+    for _, c in ipairs(self.candidates) do 
+        if c.layer == 1 or c.layer == 3 then table.insert(ordered, c) end 
+    end
 
     for _, c in ipairs(ordered) do
         if self.antiban:is_blacklisted(c.name) then
             self.ui:add_log("[L5] skip blacklisted: " .. c.name, Color3.fromRGB(200, 160, 80))
         elseif (c.type == "hooked_remote" or c.type == "RemoteEvent" or c.type == "RemoteFunction") and c.obj then
-            -- CORREÇÃO: Tenta descobrir o método real ou assume FireServer se não souber
             local method_to_use = c.method or (c.type == "RemoteFunction" and "InvokeServer" or "FireServer")
             local ok, err = pcall(function()
                 if method_to_use == "InvokeServer" then 
@@ -438,7 +447,7 @@ function Scanner:layer5_active_test()
             if ok then
                 self.captured_remote = c.obj
                 self.captured_args = c.args or {}
-                self.captured_method = method_to_use -- SALVA O MÉTODO PARA O LOOP
+                self.captured_method = method_to_use 
                 self.ui:add_log("[L5] SUCCESS ("..method_to_use.."): " .. c.name, Color3.fromRGB(120, 255, 120))
                 return true
             else
@@ -464,6 +473,8 @@ function Scanner:layer5_active_test()
 end
 
 function Scanner:run_all()
+    if self.is_scanning then return false end -- Previne cliques duplos
+    self.is_scanning = true
     self.candidates = {}
     self:layer1_passive()
     self:layer2_gc()
@@ -471,6 +482,7 @@ function Scanner:run_all()
     self:layer4_hook_passive()
     local ok = self:layer5_active_test()
     self.ui:add_log("scan done — " .. #self.candidates .. " total candidates", Color3.fromRGB(120, 200, 120))
+    self.is_scanning = false
     return ok
 end
 
@@ -489,12 +501,12 @@ function Executor:start()
     self.thread = task.spawn(function()
         while self.active do
             local ok, err = pcall(function()
+                if not self.active then return end
                 if self.scanner.captured_remote then
                     local remote = self.scanner.captured_remote
                     local args = self.scanner.captured_args or {}
                     local method = self.scanner.captured_method or "FireServer"
                     
-                    -- CORREÇÃO: Respeita o método descoberto no Scanner
                     if method == "InvokeServer" then
                         remote:InvokeServer(table.unpack(args))
                     else
@@ -505,32 +517,50 @@ function Executor:start()
                     else self.scanner.captured_prompt:FireServer() end
                 end
             end)
+            if not self.active then break end -- Corta o loop imediatamente se parou
+            
             self.antiban.total_spins = self.antiban.total_spins + 1
             self.antiban.spins_this_session = self.antiban.spins_this_session + 1
-            if ok then self.antiban:on_success() else
+            if ok then 
+                self.antiban:on_success() 
+            else
                 local backoff = self.antiban:on_error()
                 self.ui:add_log("spin err: " .. tostring(err), Color3.fromRGB(255, 120, 120))
                 task.wait(backoff)
             end
+            
+            -- CORREÇÃO: Contador de spins só conta as tentativas que não deram erro e passaram pelo backoff
             self.ui:update_counter(self.antiban)
+            
             if self.antiban:needs_session_pause() then
                 self.ui:set_status("session pause...", Color3.fromRGB(200, 160, 80))
-                self.antiban:session_pause()
+                task.wait(CONFIG.session_pause_min + math.random() * (CONFIG.session_pause_max - CONFIG.session_pause_min))
+                self.antiban.spins_this_session = 0
                 self.ui:set_status("auto spin: ON", Color3.fromRGB(120, 255, 120))
             end
-            task.wait(self.antiban:jitter(CONFIG.base_interval))
+            
+            -- CORREÇÃO: Se houve backoff, não adiciona o jitter em cima (o backoff já esperou o suficiente)
+            if ok then 
+                task.wait(self.antiban:jitter(CONFIG.base_interval)) 
+            end
         end
     end)
 end
 
-function Executor:stop() self.active = false; self.ui:set_status("auto spin: OFF", Color3.fromRGB(180, 180, 180)) end
+function Executor:stop() 
+    self.active = false
+    self.ui:set_status("auto spin: OFF", Color3.fromRGB(180, 180, 180))
+end
 
 -- Boot
 local antiban = AntiBan.new()
-local ui = UI.new()
+local executor
+local ui = UI.new(function() -- CALLBACK DE FECHAR A UI
+    if executor then executor:stop() end
+end)
 antiban.ui = ui
 local scanner = Scanner.new(ui, antiban)
-local executor = Executor.new(ui, antiban, scanner)
+executor = Executor.new(ui, antiban, scanner)
 
 ui.scan_btn.MouseButton1Click:Connect(function()
     if scanner.captured_remote or scanner.captured_prompt then ui:add_log("already have target — rescan anyway", Color3.fromRGB(200, 160, 80)) end
