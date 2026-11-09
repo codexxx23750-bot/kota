@@ -57,22 +57,15 @@ function UI.new(on_close_callback)
     main.ZIndex = 1
     main.Parent = self.gui
 
-    -- Arrastar manual
     local dragging, dragInput, dragStart, startPos
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = main.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
+            dragging = true; dragStart = input.Position; startPos = main.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
         end
     end)
     main.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
     end)
     game:GetService("UserInputService").InputChanged:Connect(function(input)
         if input == dragInput and dragging then
@@ -82,210 +75,100 @@ function UI.new(on_close_callback)
     end)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(31, 31, 31)
-    stroke.Thickness = 1
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    stroke.Parent = main
+    stroke.Color = Color3.fromRGB(31, 31, 31); stroke.Thickness = 1; stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; stroke.Parent = main
 
     local title = Instance.new("TextLabel")
-    title.Name = "title"
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    title.Text = "kota"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.Code
-    title.TextSize = 20
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.ZIndex = 2
-    title.Parent = main
+    title.Size = UDim2.new(1, 0, 0, 40); title.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    title.Text = "kota"; title.TextColor3 = Color3.fromRGB(255, 255, 255); title.Font = Enum.Font.Code
+    title.TextSize = 20; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 2; title.Parent = main
 
     local title_pad = Instance.new("UIPadding")
-    title_pad.PaddingLeft = UDim.new(0, 12)
-    title_pad.Parent = title
+    title_pad.PaddingLeft = UDim.new(0, 12); title_pad.Parent = title
 
     local close = Instance.new("TextButton")
-    close.Name = "close"
-    close.Size = UDim2.new(0, 32, 0, 32)
-    close.Position = UDim2.new(1, -40, 0, 4)
-    close.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    close.Text = "×"
-    close.TextColor3 = Color3.fromRGB(255, 255, 255)
-    close.Font = Enum.Font.Code
-    close.TextSize = 18
-    close.ZIndex = 2
-    close.Parent = main
+    close.Size = UDim2.new(0, 32, 0, 32); close.Position = UDim2.new(1, -40, 0, 4)
+    close.BackgroundColor3 = Color3.fromRGB(10, 10, 10); close.Text = "×"
+    close.TextColor3 = Color3.fromRGB(255, 255, 255); close.Font = Enum.Font.Code; close.TextSize = 18; close.ZIndex = 2; close.Parent = main
     close.MouseButton1Click:Connect(function() 
         if on_close_callback then on_close_callback() end
         self.gui:Destroy() 
     end)
 
     local status = Instance.new("TextLabel")
-    status.Name = "status"
-    status.Size = UDim2.new(1, -24, 0, 24)
-    status.Position = UDim2.new(0, 12, 0, 44)
-    status.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    status.Text = "idle — not scanning"
-    status.TextColor3 = Color3.fromRGB(180, 180, 180)
-    status.Font = Enum.Font.Code
-    status.TextSize = 12
-    status.TextXAlignment = Enum.TextXAlignment.Left
-    status.ZIndex = 2
-    status.Parent = main
+    status.Size = UDim2.new(1, -24, 0, 24); status.Position = UDim2.new(0, 12, 0, 44)
+    status.BackgroundColor3 = Color3.fromRGB(10, 10, 10); status.Text = "idle"
+    status.TextColor3 = Color3.fromRGB(180, 180, 180); status.Font = Enum.Font.Code; status.TextSize = 12
+    status.TextXAlignment = Enum.TextXAlignment.Left; status.ZIndex = 2; status.Parent = main
 
     local log = Instance.new("ScrollingFrame")
-    log.Name = "log"
-    log.Size = UDim2.new(1, -24, 0, 220)
-    log.Position = UDim2.new(0, 12, 0, 72)
-    log.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
-    log.BorderSizePixel = 0
-    log.ScrollBarThickness = 4
-    log.CanvasSize = UDim2.new(0, 0, 0, 0)
-    log.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    log.ZIndex = 2
-    log.Parent = main
+    log.Size = UDim2.new(1, -24, 0, 220); log.Position = UDim2.new(0, 12, 0, 72)
+    log.BackgroundColor3 = Color3.fromRGB(5, 5, 5); log.BorderSizePixel = 0; log.ScrollBarThickness = 4
+    log.CanvasSize = UDim2.new(0, 0, 0, 0); log.AutomaticCanvasSize = Enum.AutomaticSize.Y; log.ZIndex = 2; log.Parent = main
 
     local log_layout = Instance.new("UIListLayout")
-    log_layout.Padding = UDim.new(0, 2)
-    log_layout.Parent = log
-
+    log_layout.Padding = UDim.new(0, 2); log_layout.Parent = log
+    
     local log_pad = Instance.new("UIPadding")
-    log_pad.PaddingLeft = UDim.new(0, 6)
-    log_pad.PaddingTop = UDim.new(0, 4)
-    log_pad.Parent = log
+    log_pad.PaddingLeft = UDim.new(0, 6); log_pad.PaddingTop = UDim.new(0, 4); log_pad.Parent = log
 
     local counter = Instance.new("TextLabel")
-    counter.Name = "counter"
-    counter.Size = UDim2.new(1, -24, 0, 24)
-    counter.Position = UDim2.new(0, 12, 0, 300)
-    counter.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    counter.Text = "spins: 0  ok: 0  err: 0"
-    counter.TextColor3 = Color3.fromRGB(200, 200, 200)
-    counter.Font = Enum.Font.Code
-    counter.TextSize = 12
-    counter.TextXAlignment = Enum.TextXAlignment.Left
-    counter.ZIndex = 2
-    counter.Parent = main
+    counter.Size = UDim2.new(1, -24, 0, 24); counter.Position = UDim2.new(0, 12, 0, 300)
+    counter.BackgroundColor3 = Color3.fromRGB(10, 10, 10); counter.Text = "spins: 0 ok: 0 err: 0"
+    counter.TextColor3 = Color3.fromRGB(200, 200, 200); counter.Font = Enum.Font.Code; counter.TextSize = 12
+    counter.TextXAlignment = Enum.TextXAlignment.Left; counter.ZIndex = 2; counter.Parent = main
 
     local interval_label = Instance.new("TextLabel")
-    interval_label.Size = UDim2.new(0, 90, 0, 24)
-    interval_label.Position = UDim2.new(0, 12, 0, 332)
-    interval_label.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    interval_label.Text = "interval (s)"
-    interval_label.TextColor3 = Color3.fromRGB(160, 160, 160)
-    interval_label.Font = Enum.Font.Code
-    interval_label.TextSize = 11
-    interval_label.TextXAlignment = Enum.TextXAlignment.Left
-    interval_label.ZIndex = 2
-    interval_label.Parent = main
+    interval_label.Size = UDim2.new(0, 90, 0, 24); interval_label.Position = UDim2.new(0, 12, 0, 332)
+    interval_label.BackgroundColor3 = Color3.fromRGB(10, 10, 10); interval_label.Text = "interval (s)"
+    interval_label.TextColor3 = Color3.fromRGB(160, 160, 160); interval_label.Font = Enum.Font.Code; interval_label.TextSize = 11
+    interval_label.TextXAlignment = Enum.TextXAlignment.Left; interval_label.ZIndex = 2; interval_label.Parent = main
 
     local interval = Instance.new("TextBox")
-    interval.Name = "interval"
-    interval.Size = UDim2.new(0, 80, 0, 24)
-    interval.Position = UDim2.new(0, 110, 0, 332)
-    interval.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
-    interval.BorderSizePixel = 1
-    interval.BorderColor3 = Color3.fromRGB(31, 31, 31)
-    interval.Text = tostring(CONFIG.base_interval)
-    interval.TextColor3 = Color3.fromRGB(255, 255, 255)
-    interval.Font = Enum.Font.Code
-    interval.TextSize = 12
-    interval.ZIndex = 2
-    interval.Parent = main
+    interval.Size = UDim2.new(0, 80, 0, 24); interval.Position = UDim2.new(0, 110, 0, 332)
+    interval.BackgroundColor3 = Color3.fromRGB(5, 5, 5); interval.BorderSizePixel = 1; interval.BorderColor3 = Color3.fromRGB(31, 31, 31)
+    interval.Text = tostring(CONFIG.base_interval); interval.TextColor3 = Color3.fromRGB(255, 255, 255)
+    interval.Font = Enum.Font.Code; interval.TextSize = 12; interval.ZIndex = 2; interval.Parent = main
 
     local session_label = Instance.new("TextLabel")
-    session_label.Size = UDim2.new(0, 110, 0, 24)
-    session_label.Position = UDim2.new(0, 200, 0, 332)
-    session_label.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    session_label.Text = "spins/session"
-    session_label.TextColor3 = Color3.fromRGB(160, 160, 160)
-    session_label.Font = Enum.Font.Code
-    session_label.TextSize = 11
-    session_label.TextXAlignment = Enum.TextXAlignment.Left
-    session_label.ZIndex = 2
-    session_label.Parent = main
+    session_label.Size = UDim2.new(0, 110, 0, 24); session_label.Position = UDim2.new(0, 200, 0, 332)
+    session_label.BackgroundColor3 = Color3.fromRGB(10, 10, 10); session_label.Text = "spins/session"
+    session_label.TextColor3 = Color3.fromRGB(160, 160, 160); session_label.Font = Enum.Font.Code; session_label.TextSize = 11
+    session_label.TextXAlignment = Enum.TextXAlignment.Left; session_label.ZIndex = 2; session_label.Parent = main
 
     local session = Instance.new("TextBox")
-    session.Name = "session"
-    session.Size = UDim2.new(0, 60, 0, 24)
-    session.Position = UDim2.new(0, 312, 0, 332)
-    session.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
-    session.BorderSizePixel = 1
-    session.BorderColor3 = Color3.fromRGB(31, 31, 31)
-    session.Text = tostring(CONFIG.spins_per_session)
-    session.TextColor3 = Color3.fromRGB(255, 255, 255)
-    session.Font = Enum.Font.Code
-    session.TextSize = 12
-    session.ZIndex = 2
-    session.Parent = main
+    session.Size = UDim2.new(0, 60, 0, 24); session.Position = UDim2.new(0, 312, 0, 332)
+    session.BackgroundColor3 = Color3.fromRGB(5, 5, 5); session.BorderSizePixel = 1; session.BorderColor3 = Color3.fromRGB(31, 31, 31)
+    session.Text = tostring(CONFIG.spins_per_session); session.TextColor3 = Color3.fromRGB(255, 255, 255)
+    session.Font = Enum.Font.Code; session.TextSize = 12; session.ZIndex = 2; session.Parent = main
 
     local scan = Instance.new("TextButton")
-    scan.Name = "scan"
-    scan.Size = UDim2.new(0, 180, 0, 36)
-    scan.Position = UDim2.new(0, 12, 0, 372)
-    scan.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    scan.Text = "SCAN"
-    scan.TextColor3 = Color3.fromRGB(255, 255, 255)
-    scan.Font = Enum.Font.Code
-    scan.TextSize = 14
-    scan.ZIndex = 2
-    scan.Parent = main
+    scan.Size = UDim2.new(0, 180, 0, 36); scan.Position = UDim2.new(0, 12, 0, 372)
+    scan.BackgroundColor3 = Color3.fromRGB(10, 10, 10); scan.Text = "SCAN"; scan.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scan.Font = Enum.Font.Code; scan.TextSize = 14; scan.ZIndex = 2; scan.Parent = main
 
     local auto = Instance.new("TextButton")
-    auto.Name = "auto"
-    auto.Size = UDim2.new(0, 180, 0, 36)
-    auto.Position = UDim2.new(0, 204, 0, 372)
-    auto.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    auto.Text = "AUTO SPIN: OFF"
-    auto.TextColor3 = Color3.fromRGB(255, 255, 255)
-    auto.Font = Enum.Font.Code
-    auto.TextSize = 14
-    auto.ZIndex = 2
-    auto.Parent = main
+    auto.Size = UDim2.new(0, 180, 0, 36); auto.Position = UDim2.new(0, 204, 0, 372)
+    auto.BackgroundColor3 = Color3.fromRGB(10, 10, 10); auto.Text = "AUTO SPIN: OFF"; auto.TextColor3 = Color3.fromRGB(255, 255, 255)
+    auto.Font = Enum.Font.Code; auto.TextSize = 14; auto.ZIndex = 2; auto.Parent = main
 
-    local footer = Instance.new("TextLabel")
-    footer.Size = UDim2.new(1, -24, 0, 20)
-    footer.Position = UDim2.new(0, 12, 1, -24)
-    footer.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    footer.Text = "kota — low-footprint automation"
-    footer.TextColor3 = Color3.fromRGB(80, 80, 80)
-    footer.Font = Enum.Font.Code
-    footer.TextSize = 10
-    footer.TextXAlignment = Enum.TextXAlignment.Left
-    footer.ZIndex = 2
-    footer.Parent = main
-
-    self.main = main
-    self.log = log
-    self.log_layout = log_layout
-    self.status = status
-    self.counter = counter
-    self.interval = interval
-    self.session = session
-    self.scan_btn = scan
-    self.auto_btn = auto
+    self.main = main; self.log = log; self.status = status; self.counter = counter
+    self.interval = interval; self.session = session; self.scan_btn = scan; self.auto_btn = auto
     return self
 end
 
 function UI:add_log(text, color)
+    if not self.log or not self.log.Parent then return end -- Previne erro se a UI foi fechada
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -12, 0, 16)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = color or Color3.fromRGB(180, 180, 180)
-    label.Font = Enum.Font.Code
-    label.TextSize = 11
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextWrapped = true
-    label.ZIndex = 3
-    label.Parent = self.log
-
+    label.Size = UDim2.new(1, -12, 0, 16); label.BackgroundTransparency = 1; label.Text = text
+    label.TextColor3 = color or Color3.fromRGB(180, 180, 180); label.Font = Enum.Font.Code; label.TextSize = 11
+    label.TextXAlignment = Enum.TextXAlignment.Left; label.TextWrapped = true; label.ZIndex = 3; label.Parent = self.log
     local labels = {}
     for _, c in ipairs(self.log:GetChildren()) do if c:IsA("TextLabel") then table.insert(labels, c) end end
     if #labels > 100 then labels[1]:Destroy() end
 end
 
-function UI:set_status(text, color) self.status.Text = text; self.status.TextColor3 = color end
-function UI:update_counter(ab) self.counter.Text = string.format("spins: %d  ok: %d  err: %d", ab.total_spins, ab.total_ok, ab.total_err) end
+function UI:set_status(text, color) if self.status and self.status.Parent then self.status.Text = text; self.status.TextColor3 = color end end
+function UI:update_counter(ab) if self.counter and self.counter.Parent then self.counter.Text = string.format("spins: %d ok: %d err: %d", ab.total_spins, ab.total_ok, ab.total_err) end end
 
 -- Scanner
 local Scanner = {}
@@ -302,7 +185,7 @@ function Scanner.new(ui, antiban)
     return setmetatable({
         ui = ui, antiban = antiban, candidates = {}, 
         captured_args = nil, captured_remote = nil, captured_prompt = nil, 
-        captured_method = nil, is_scanning = false -- Trava de varredura concorrente
+        captured_method = nil, is_scanning = false
     }, Scanner)
 end
 
@@ -422,7 +305,6 @@ end
 function Scanner:layer5_active_test()
     self.ui:add_log("[L5] active test...", Color3.fromRGB(120, 200, 120))
     local ordered = {}
-    -- Prioriza os que tem "spin" no nome ou que vieram do Hook
     for _, c in ipairs(self.candidates) do 
         if c.layer == 4 or c.layer == 2 or (c.name and c.name:lower():find("spin")) then 
             table.insert(ordered, c) 
@@ -445,19 +327,15 @@ function Scanner:layer5_active_test()
                 end
             end)
             if ok then
-                self.captured_remote = c.obj
-                self.captured_args = c.args or {}
-                self.captured_method = method_to_use 
+                self.captured_remote = c.obj; self.captured_args = c.args or {}; self.captured_method = method_to_use 
                 self.ui:add_log("[L5] SUCCESS ("..method_to_use.."): " .. c.name, Color3.fromRGB(120, 255, 120))
                 return true
             else
                 self.antiban:blacklist_remote(c.name)
                 self.ui:add_log("[L5] fail/blacklist: " .. c.name, Color3.fromRGB(255, 120, 120))
             end
-        elseif (c.type == "ProximityPrompt" or c.type == "ClickDetector") and c.obj then
-            local ok = pcall(function()
-                if c.type == "ProximityPrompt" then fireproximityprompt(c.obj) else c.obj:FireServer() end
-            end)
+        elseif (c.type == "ProximityPrompt") and c.obj then
+            local ok = pcall(function() fireproximityprompt(c.obj) end)
             if ok then
                 self.captured_prompt = c.obj
                 self.ui:add_log("[L5] SUCCESS (Prompt): " .. c.name, Color3.fromRGB(120, 255, 120))
@@ -466,6 +344,25 @@ function Scanner:layer5_active_test()
                 self.antiban:blacklist_remote(c.name)
                 self.ui:add_log("[L5] fail/blacklist: " .. c.name, Color3.fromRGB(255, 120, 120))
             end
+        elseif (c.type == "ClickDetector") and c.obj then
+            local ok = pcall(function() fireclickdetector(c.obj) end)
+            if ok then
+                self.captured_click = c.obj
+                self.ui:add_log("[L5] SUCCESS (ClickDetector): " .. c.name, Color3.fromRGB(120, 255, 120))
+                return true
+            else
+                self.antiban:blacklist_remote(c.name)
+                self.ui:add_log("[L5] fail/blacklist: " .. c.name, Color3.fromRGB(255, 120, 120))
+            end
+        elseif c.type == "BindableEvent" and c.obj then
+            local ok = pcall(function() c.obj:Fire() end)
+            if ok then
+                self.captured_bindable = c.obj
+                self.ui:add_log("[L5] SUCCESS (BindableEvent): " .. c.name, Color3.fromRGB(120, 255, 120))
+                return true
+            else
+                self.antiban:blacklist_remote(c.name)
+            end
         end
     end
     self.ui:add_log("[L5] no remote confirmed", Color3.fromRGB(255, 120, 120))
@@ -473,14 +370,28 @@ function Scanner:layer5_active_test()
 end
 
 function Scanner:run_all()
-    if self.is_scanning then return false end -- Previne cliques duplos
+    if self.is_scanning then return false end
     self.is_scanning = true
     self.candidates = {}
-    self:layer1_passive()
-    self:layer2_gc()
-    self:layer3_bytecode()
-    self:layer4_hook_passive()
-    local ok = self:layer5_active_test()
+    
+    -- Reset de estado anterior
+    self.captured_remote = nil; self.captured_args = nil; self.captured_prompt = nil
+    self.captured_click = nil; self.captured_bindable = nil; self.captured_method = nil
+
+    local success, ok = pcall(function()
+        self:layer1_passive()
+        self:layer2_gc()
+        self:layer3_bytecode()
+        self:layer4_hook_passive()
+        return self:layer5_active_test()
+    end)
+
+    if not success then
+        self.ui:add_log("scan crashed: " .. tostring(ok), Color3.fromRGB(255, 120, 120))
+        self.is_scanning = false
+        return false
+    end
+
     self.ui:add_log("scan done — " .. #self.candidates .. " total candidates", Color3.fromRGB(120, 200, 120))
     self.is_scanning = false
     return ok
@@ -493,7 +404,7 @@ function Executor.new(ui, antiban, scanner) return setmetatable({ui=ui, antiban=
 
 function Executor:start()
     if self.active then return end
-    if not self.scanner.captured_remote and not self.scanner.captured_prompt then
+    if not self.scanner.captured_remote and not self.scanner.captured_prompt and not self.scanner.captured_click and not self.scanner.captured_bindable then
         self.ui:add_log("no target — scan first", Color3.fromRGB(255, 120, 120)); return
     end
     self.active = true
@@ -506,30 +417,28 @@ function Executor:start()
                     local remote = self.scanner.captured_remote
                     local args = self.scanner.captured_args or {}
                     local method = self.scanner.captured_method or "FireServer"
-                    
-                    if method == "InvokeServer" then
-                        remote:InvokeServer(table.unpack(args))
-                    else
-                        remote:FireServer(table.unpack(args))
-                    end
+                    if method == "InvokeServer" then remote:InvokeServer(table.unpack(args)) else remote:FireServer(table.unpack(args)) end
                 elseif self.scanner.captured_prompt then
-                    if self.scanner.captured_prompt:IsA("ProximityPrompt") then fireproximityprompt(self.scanner.captured_prompt)
-                    else self.scanner.captured_prompt:FireServer() end
+                    fireproximityprompt(self.scanner.captured_prompt)
+                elseif self.scanner.captured_click then
+                    fireclickdetector(self.scanner.captured_click)
+                elseif self.scanner.captured_bindable then
+                    self.scanner.captured_bindable:Fire()
                 end
             end)
-            if not self.active then break end -- Corta o loop imediatamente se parou
+            if not self.active then break end
             
-            self.antiban.total_spins = self.antiban.total_spins + 1
-            self.antiban.spins_this_session = self.antiban.spins_this_session + 1
             if ok then 
+                self.antiban.total_spins = self.antiban.total_spins + 1
+                self.antiban.spins_this_session = self.antiban.spins_this_session + 1
                 self.antiban:on_success() 
             else
                 local backoff = self.antiban:on_error()
                 self.ui:add_log("spin err: " .. tostring(err), Color3.fromRGB(255, 120, 120))
                 task.wait(backoff)
+                -- Não acumula o jitter se deu erro
             end
             
-            -- CORREÇÃO: Contador de spins só conta as tentativas que não deram erro e passaram pelo backoff
             self.ui:update_counter(self.antiban)
             
             if self.antiban:needs_session_pause() then
@@ -539,31 +448,25 @@ function Executor:start()
                 self.ui:set_status("auto spin: ON", Color3.fromRGB(120, 255, 120))
             end
             
-            -- CORREÇÃO: Se houve backoff, não adiciona o jitter em cima (o backoff já esperou o suficiente)
-            if ok then 
-                task.wait(self.antiban:jitter(CONFIG.base_interval)) 
-            end
+            if ok then task.wait(self.antiban:jitter(CONFIG.base_interval)) end
         end
     end)
 end
 
 function Executor:stop() 
     self.active = false
-    self.ui:set_status("auto spin: OFF", Color3.fromRGB(180, 180, 180))
+    if self.ui then self.ui:set_status("auto spin: OFF", Color3.fromRGB(180, 180, 180)) end
 end
 
 -- Boot
 local antiban = AntiBan.new()
 local executor
-local ui = UI.new(function() -- CALLBACK DE FECHAR A UI
-    if executor then executor:stop() end
-end)
+local ui = UI.new(function() if executor then executor:stop() end end)
 antiban.ui = ui
 local scanner = Scanner.new(ui, antiban)
 executor = Executor.new(ui, antiban, scanner)
 
 ui.scan_btn.MouseButton1Click:Connect(function()
-    if scanner.captured_remote or scanner.captured_prompt then ui:add_log("already have target — rescan anyway", Color3.fromRGB(200, 160, 80)) end
     ui:set_status("scanning...", Color3.fromRGB(200, 160, 80))
     task.spawn(function()
         local ok = scanner:run_all()
